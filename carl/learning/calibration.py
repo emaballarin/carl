@@ -95,8 +95,8 @@ class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
         * `self` [object]:
             `self`.
         """
-        # Check inputs
-        X, y = check_X_y(X, y)
+        # Check inputs. Avoid this in order to use RNNs
+        # X, y = check_X_y(X, y)
 
         # Convert y
         label_encoder = LabelEncoder()
