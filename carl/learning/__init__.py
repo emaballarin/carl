@@ -10,6 +10,7 @@ complementary to Scikit-Learn.
 from .base import as_classifier
 from .base import check_cv
 from .calibration import CalibratedClassifierCV
+from .calibration import CalibratedRegressorCV
 from .parameterize import make_parameterized_classification
 from .parameterize import ParameterStacker
 from .parameterize import ParameterizedClassifier
@@ -19,6 +20,7 @@ from .parameterize import ParameterizedRegressor
 __all__ = ("as_classifier",
            "check_cv",
            "CalibratedClassifierCV",
+           "CalibratedRegressorCV",
            "make_parameterized_classification",
            "ParameterStacker",
            "ParameterizedClassifier",
