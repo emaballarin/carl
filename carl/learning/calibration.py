@@ -56,7 +56,7 @@ class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
             (`"linear"`, `"nearest"`, `"zero"`, `"slinear"`, `"quadratic"`,
             `"cubic"`), if `method` is `"histogram"`.
 
-        * `variable_dith_width` [boolean, optional]
+        * `variable_width` [boolean, optional]
             If True use equal probability variable length bins, if
             `method` is `"histogram"`.
 

@@ -95,6 +95,6 @@ class RegressorRatio(BaseEstimator, DensityRatioMixin):
         p = self.regressor_.predict(X)
 
         if log:
-            return np.log(p[:, 0])
+            return np.log(p[:])
         else:
             return p[:]

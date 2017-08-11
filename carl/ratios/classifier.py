@@ -124,11 +124,15 @@ class ClassifierRatio(BaseEstimator, DensityRatioMixin):
 
         if isinstance(clf, RegressorMixin):
             clf = as_classifier(clf)
-
+        
         if sample_weight is None:
             self.classifier_ = clf.fit(X, y)
         else:
-            self.classifier_ = clf.fit(X, y, sample_weight=sample_weight)
+            try:
+                self.classifier_ = clf.fit(X, y, sample_weight=sample_weight)
+            except TypeError:
+                self.classifier_ = clf.fit(X, y)
+                
 
         return self
 
