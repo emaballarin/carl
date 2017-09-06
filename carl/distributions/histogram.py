@@ -98,6 +98,13 @@ class Histogram(DistributionMixin):
             h, e = np.histogram(X.ravel(), bins=bins, range=range_,
                                 weights=sample_weight, normed=False)
             e = [e]
+            
+        elif isinstance(self.bins, (list,tuple)):
+            bins = self.bins
+            range_ = self.range[0] if self.range else None
+            h, e = np.histogram(X.ravel(), bins=bins, range=range_,
+                                weights=sample_weight, normed=False)
+            e = [e]
 
         elif self.variable_width:
             ticks = [np.percentile(X.ravel(), 100. * k / self.bins) for k
