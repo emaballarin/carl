@@ -22,8 +22,9 @@ class Histogram(DistributionMixin):
 
         Parameters
         ----------
-        * `bins` [int or string]:
-            The number of bins or `"blocks"` for bayesian blocks.
+        * `bins` [int or list or string]:
+            The number of bins, a list of bin edges, or `"blocks"`
+            for bayesian blocks.
 
         * `range` [list of bounds (low, high)]:
             The boundaries. If `None`, bounds are inferred from data.
@@ -86,6 +87,7 @@ class Histogram(DistributionMixin):
         return low + u * (high - low)
 
     def fit(self, X, sample_weight=None, **kwargs):
+        
         # Checks
         X = check_array(X)
         if sample_weight is not None and len(sample_weight) != len(X):
@@ -104,6 +106,9 @@ class Histogram(DistributionMixin):
             range_ = self.range[0] if self.range else None
             h, e = np.histogram(X.ravel(), bins=bins, range=range_,
                                 weights=sample_weight, normed=False)
+            h, e = h.astype(float), e.astype(float)
+            widths = e[1:] - e[:-1]
+            h = h / widths / h.sum()
             e = [e]
 
         elif self.variable_width:

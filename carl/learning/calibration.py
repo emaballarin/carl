@@ -316,26 +316,25 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
         if self.bins == "auto":
             bins = 10 + int(len(t0) ** (1. / 3.))
 
-        range = self.range
+        range_ = self.range
         if self.range is None:
             t_min = max(0, min(np.min(t0), np.min(t1)) - self.eps)
             t_max = min(1, max(np.max(t0), np.max(t1)) + self.eps)
-            range = [(t_min, t_max)]
+            range_ = [(t_min, t_max)]
 
         # Common variable-width binning for nom and denom
         if self.variable_width and not self.independent_binning:
             bins_ = [np.percentile(np.hstack((t0,t1)).ravel(),
                                    100. * k / self.bins)
                                    for k in range(bins + 1)]
-            print bins_
         else:
             bins_ = bins
             
         # Fit
-        self.calibrator0 = Histogram(bins=bins_, range=range,
+        self.calibrator0 = Histogram(bins=bins_, range=range_,
                                      interpolation=self.interpolation,
                                      variable_width=self.variable_width)
-        self.calibrator1 = Histogram(bins=bins_, range=range,
+        self.calibrator1 = Histogram(bins=bins_, range=range_,
                                      interpolation=self.interpolation,
                                      variable_width=self.variable_width)
 
