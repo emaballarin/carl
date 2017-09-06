@@ -325,7 +325,7 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
         # Common variable-width binning for nom and denom
         if self.variable_width and not self.independent_binning:
             bins_ = [np.percentile(np.hstack((t0,t1)).ravel(),
-                                   100. * k / self.bins)
+                                   100. * k / bins)
                                    for k in range(bins + 1)]
         else:
             bins_ = bins
