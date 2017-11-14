@@ -9,6 +9,7 @@ from .base import KnownDensityRatio
 from .base import InverseRatio
 from .base import DecomposedRatio
 from .classifier import ClassifierRatio
+from .classifier import ClassifierScoreRatio
 from .regressor import RegressorRatio
 
 __all__ = ("DensityRatioMixin",
@@ -16,4 +17,5 @@ __all__ = ("DensityRatioMixin",
            "InverseRatio",
            "DecomposedRatio",
            "ClassifierRatio",
+           "ClassifierScoreRatio",
            "RegressorRatio")

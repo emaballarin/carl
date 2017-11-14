@@ -17,6 +17,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import check_X_y
 from sklearn.utils import column_or_1d
+from sklearn.neighbors import NearestNeighbors
 
 from ..distributions import KernelDensity
 from ..distributions import Histogram
@@ -230,6 +231,289 @@ class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
             p[:, 1] += calibrator.predict(clf.predict_proba(X)[:, 1])
 
         p[:, 1] /= len(self.classifiers_)
+        p[:, 0] = 1. - p[:, 1]
+
+        return p
+
+    def _clone(self):
+        estimator = clone(self, original=True)
+        if self.cv == "prefit":
+            estimator.base_estimator = self.base_estimator
+
+        return estimator
+
+
+
+
+
+
+
+class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
+    """Probability calibration.
+
+    With this class, the `base_estimator` is fit on the train set of the
+    cross-validation generator and the test set is used for calibration. The
+    probabilities for each of the folds are then averaged for prediction.
+    """
+
+    def __init__(self, base_estimator,
+                 method="histogram", bins="auto",
+                 interpolation=None, variable_width=False, independent_binning=True, cv=1):
+        """Constructor.
+
+        Parameters
+        ----------
+        * `base_estimator` [`ClassifierMixin`]:
+            The classifier whose output decision function needs to be
+            calibrated to offer more accurate predict_proba outputs. If
+            `cv=prefit`, the classifier must have been fit already on data.
+
+        * `method` [string]:
+            The method to use for calibration. Supported methods include
+            `"histogram"`, `"kde"`, `"isotonic"`, `"interpolated-isotonic"` and
+            `"sigmoid"`.
+
+        * `bins` [int, default="auto"]:
+            The number of bins, if `method` is `"histogram"`.
+
+        * `interpolation` [string, optional]
+            Specifies the kind of interpolation between bins as a string
+            (`"linear"`, `"nearest"`, `"zero"`, `"slinear"`, `"quadratic"`,
+            `"cubic"`), if `method` is `"histogram"`.
+
+        * `variable_width` [boolean, optional]
+            If True use equal probability variable length bins, if
+            `method` is `"histogram"`.
+
+        * `independent_binning` [boolean, optional]
+            If True use determine binning independently for nominator and denominator, if
+            `method` is `"histogram"`.
+
+        * `cv` [integer, cross-validation generator, iterable or `"prefit"`]:
+            Determines the cross-validation splitting strategy.
+            Possible inputs for cv are:
+
+            - integer, to specify the number of folds.
+            - An object to be used as a cross-validation generator.
+            - An iterable yielding train/test splits.
+
+            If `"prefit"` is passed, it is assumed that base_estimator has been
+            fitted already and all data is used for calibration. If `cv=1`,
+            the training data is used for both training and calibration.
+        """
+        self.base_estimator = base_estimator
+        self.method = method
+        self.bins = bins
+        self.interpolation = interpolation
+        self.variable_width = variable_width
+        self.independent_binning = independent_binning
+        self.cv = cv
+
+    def fit(self, X, y, calibrate_class, sample_weight=None):
+        """Fit the calibrated model.
+
+        Parameters
+        ----------
+        * `X` [array-like, shape=(n_samples, n_features)]:
+            Training data.
+
+        * `y` [array-like, shape=(n_samples,)]:
+            Target values.
+
+        Returns
+        -------
+        * `self` [object]:
+            `self`.
+        """
+        # Check inputs
+        X, y = check_X_y(X, y)
+
+        # Convert y
+        label_encoder = LabelEncoder()
+        y = label_encoder.fit_transform(y).astype(np.float)
+
+        if len(label_encoder.classes_) != 2:
+            raise ValueError
+
+        self.classes_ = label_encoder.classes_
+        # Calibrator
+        if self.method == "histogram":
+            base_calibrator = HistogramCalibrator(
+                bins=self.bins, interpolation=self.interpolation,
+                variable_width=self.variable_width,
+                independent_binning=self.independent_binning)
+        elif self.method == "kde":
+            base_calibrator = KernelDensityCalibrator()
+        elif self.method == "isotonic":
+            base_calibrator = IsotonicCalibrator()
+        elif self.method == "interpolated-isotonic":
+            base_calibrator = IsotonicCalibrator(interpolation=True)
+        elif self.method == "sigmoid":
+            base_calibrator = SigmoidCalibrator()
+        else:
+            base_calibrator = self.method
+        # Fit
+        if self.cv == "prefit" or self.cv == 1:
+            # Classifier
+            if self.cv == 1:
+                clf = clone(self.base_estimator)
+
+                if isinstance(clf, RegressorMixin):
+                    clf = as_classifier(clf)
+
+                if sample_weight is None:
+                    clf.fit(X, y)
+                else:
+                    clf.fit(X, y, sample_weight=sample_weight)
+
+            else:
+                clf = self.base_estimator
+
+            self.classifiers_ = [clf]
+
+            # Number of parameters
+            self.n_thetas = len(self.classifiers_[0].params)
+
+            # Okay, make calibrators
+            T = clf.predict_proba(X)[:, 1]
+
+            self.calibrators_ = []
+            self.calibrator_mean_thetas = []
+
+            # Fit one calibrator for any number in calibrate_class
+            n_calibrators = max(calibrate_class) + 1
+
+            for i in range(n_calibrators):
+                thetas = X[calibrate_class == i][:,-self.n_thetas:]
+
+                assert len(thetas) > 0
+
+                mean_theta = np.asarray( [np.mean(thetas[:,j]) for j in range(self.n_thetas) ] )
+                self.calibrator_mean_thetas.append(mean_theta)
+
+                # Calibrator
+                calibrator = clone(base_calibrator)
+
+                if sample_weight is None:
+                    calibrator.fit(T[calibrate_class == i], y[calibrate_class == i])
+                else:
+                    calibrator.fit(T[calibrate_class == i], y[calibrate_class == i],
+                                   sample_weight=sample_weight[calibrate_class == i])
+
+                self.calibrators_.append(calibrator)
+
+                # print ''
+                # print 'Calibrator', i, 'trained on', len(T[calibrate_class == i]), 'samples with mean theta', self.calibrator_mean_thetas[i]
+                # print 'Input:', T[calibrate_class == i]
+                # print 'True output:', y[calibrate_class == i]
+                # print 'Debug output:', calibrator.predict( T[calibrate_class == i] )
+
+        else:
+
+            raise NoteImplementedError()
+
+            self.classifiers_ = []
+            self.calibrators_ = []
+
+            cv = check_cv(self.cv, X=X, y=y, classifier=True)
+
+            for train, calibrate in cv.split(X[sample_calibrate], y[sample_calibrate]):
+
+                print('')
+                print(train)
+
+                train = np.hstack(train, np.range(len(X))[np.invert(sample_calibrate)] ) # Use all events for training
+
+                print(train)
+                # Classifier
+                clf = clone(self.base_estimator)
+
+                if isinstance(clf, RegressorMixin):
+                    clf = as_classifier(clf)
+
+                if sample_weight is None:
+                    clf.fit(X[train], y[train])
+                else:
+                    clf.fit(X[train], y[train],
+                            sample_weight=sample_weight[train])
+
+                self.classifiers_.append(clf)
+
+                # Calibrator
+                calibrator = clone(base_calibrator)
+                T = clf.predict_proba(X[calibrate])[:, 1]
+
+                if sample_weight is None:
+                    calibrator.fit(T, y[calibrate])
+                else:
+                    calibrator.fit(T, y[calibrate],
+                                   sample_weight=sample_weight[calibrate])
+
+                self.calibrators_.append(calibrator)
+
+        return self
+
+    def predict(self, X):
+        """Predict the targets for `X`.
+
+        Can be different from the predictions of the uncalibrated classifier.
+
+        Parameters
+        ----------
+        * `X` [array-like, shape=(n_samples, n_features)]:
+            The samples.
+
+        Returns
+        -------
+        * `y` [array, shape=(n_samples,)]:
+            The predicted class.
+        """
+        return np.where(self.predict_proba(X)[:, 1] >= 0.5,
+                        self.classes_[1],
+                        self.classes_[0])
+
+    def predict_proba(self, X):
+        """Predict the posterior probabilities of classification for `X`.
+
+        Parameters
+        ----------
+        * `X` [array-like, shape=(n_samples, n_features)]:
+            The samples.
+
+        Returns
+        -------
+        * `probas` [array, shape=(n_samples, n_classes)]:
+            The predicted probabilities.
+        """
+
+        self.n_thetas = len(self.classifiers_[0].params)
+
+        thetas = X[:,-self.n_thetas:]
+
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(self.calibrator_mean_thetas)
+        _, nearest_indices = nbrs.kneighbors(thetas)
+        nearest_indices = nearest_indices.flatten()
+
+        p = np.zeros((len(X), 2))
+
+        T = self.classifiers_[0].predict_proba(X)[:, 1]
+
+        #for clf, calibrator in zip(self.classifiers_, self.calibrators_):
+        #    p[:, 1] += calibrator.predict(clf.predict_proba(X)[:, 1])
+
+        if list(nearest_indices[1:]) == list(nearest_indices[:-1]):
+            p[:,1] = self.calibrators_[nearest_indices[0]].predict(T)
+        else:
+            for i in range(len(X)):
+                p[i,1] = self.calibrators_[nearest_indices[i]].predict([T[i]])[0]
+
+        # print ''
+        # print 'X:', X
+        # print 'Calibrator:', nearest_indices
+        # print 'Classifier:', T
+        # print 'Calibrated:', p[:,1]
+
+        #p[:, 1] /= len(self.classifiers_)
         p[:, 0] = 1. - p[:, 1]
 
         return p
