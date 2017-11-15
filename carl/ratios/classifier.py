@@ -208,6 +208,7 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
 
         if prefit:
             self.identity_ = False
+
             self.classifier_ = base_estimator
 
 
@@ -352,9 +353,9 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
             # Instead, try:
             prediction = self.classifier_.predict(X)
             p = np.zeros((len(X), 2))
-            p[:,0] = prediction[:,0] / (1. - prediction[:,0])
-            p[:,1] = 1. - p[:,1]
-            scores = prediction[:,2:]
+            p[:,1] = prediction[:,0]
+            p[:,0] = 1. - prediction[:,0]
+            scores = prediction[:,1:]
 
             if log:
                 return np.log(p[:, 0]) - np.log(p[:, 1]), scores
