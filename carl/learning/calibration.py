@@ -435,7 +435,7 @@ class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
         prediction = self.classifiers_[0].predict(X)
 
         # Calibrated shat prediction
-        p[:, 0] += self.calibrators_[0].predict(clf.predict(X)[:, 0]) / float(len(self.calibrators_))
+        p[:, 0] += self.calibrators_[0].predict(prediction[:, 0])
 
         # Pipe through score output
         p[:, 1] = prediction[:,1]
