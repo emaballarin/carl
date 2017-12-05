@@ -244,11 +244,7 @@ class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
 
 
 
-
-
-
-
-class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
+class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
     """Probability calibration.
 
     With this class, the `base_estimator` is fit on the train set of the
@@ -256,9 +252,8 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
     probabilities for each of the folds are then averaged for prediction.
     """
 
-    def __init__(self, base_estimator,
-                 method="histogram", bins="auto",
-                 interpolation=None, variable_width=False, independent_binning=True, cv=1):
+    def __init__(self, base_estimator, method="histogram", bins="auto",
+                 interpolation=None, variable_width=False, independent_binning=True, cv="prefit"):
         """Constructor.
 
         Parameters
@@ -309,7 +304,7 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
         self.independent_binning = independent_binning
         self.cv = cv
 
-    def fit(self, X, y, calibrate_class, sample_weight=None):
+    def fit(self, X, y, sample_weight=None):
         """Fit the calibrated model.
 
         Parameters
@@ -356,6 +351,8 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
         if self.cv == "prefit" or self.cv == 1:
             # Classifier
             if self.cv == 1:
+                raise NotImplementedError
+
                 clf = clone(self.base_estimator)
 
                 if isinstance(clf, RegressorMixin):
@@ -371,60 +368,26 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
 
             self.classifiers_ = [clf]
 
-            # Number of parameters
-            self.n_thetas = len(self.classifiers_[0].params)
+            # Calibrator
+            calibrator = clone(base_calibrator)
+            T = clf.predict(X)[:, 0]
 
-            # Okay, make calibrators
-            T = clf.predict_proba(X)[:, 1]
+            if sample_weight is None:
+                calibrator.fit(T, y)
+            else:
+                calibrator.fit(T, y, sample_weight=sample_weight)
 
-            self.calibrators_ = []
-            self.calibrator_mean_thetas = []
-
-            # Fit one calibrator for any number in calibrate_class
-            n_calibrators = max(calibrate_class) + 1
-
-            for i in range(n_calibrators):
-                thetas = X[calibrate_class == i][:,-self.n_thetas:]
-
-                assert len(thetas) > 0
-
-                mean_theta = np.asarray( [np.mean(thetas[:,j]) for j in range(self.n_thetas) ] )
-                self.calibrator_mean_thetas.append(mean_theta)
-
-                # Calibrator
-                calibrator = clone(base_calibrator)
-
-                if sample_weight is None:
-                    calibrator.fit(T[calibrate_class == i], y[calibrate_class == i])
-                else:
-                    calibrator.fit(T[calibrate_class == i], y[calibrate_class == i],
-                                   sample_weight=sample_weight[calibrate_class == i])
-
-                self.calibrators_.append(calibrator)
-
-                # print ''
-                # print 'Calibrator', i, 'trained on', len(T[calibrate_class == i]), 'samples with mean theta', self.calibrator_mean_thetas[i]
-                # print 'Input:', T[calibrate_class == i]
-                # print 'True output:', y[calibrate_class == i]
-                # print 'Debug output:', calibrator.predict( T[calibrate_class == i] )
+            self.calibrators_ = [calibrator]
 
         else:
-
-            raise NoteImplementedError()
+            raise NotImplementedError
 
             self.classifiers_ = []
             self.calibrators_ = []
 
             cv = check_cv(self.cv, X=X, y=y, classifier=True)
 
-            for train, calibrate in cv.split(X[sample_calibrate], y[sample_calibrate]):
-
-                print('')
-                print(train)
-
-                train = np.hstack(train, np.range(len(X))[np.invert(sample_calibrate)] ) # Use all events for training
-
-                print(train)
+            for train, calibrate in cv.split(X, y):
                 # Classifier
                 clf = clone(self.base_estimator)
 
@@ -454,26 +417,7 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
         return self
 
     def predict(self, X):
-        """Predict the targets for `X`.
-
-        Can be different from the predictions of the uncalibrated classifier.
-
-        Parameters
-        ----------
-        * `X` [array-like, shape=(n_samples, n_features)]:
-            The samples.
-
-        Returns
-        -------
-        * `y` [array, shape=(n_samples,)]:
-            The predicted class.
-        """
-        return np.where(self.predict_proba(X)[:, 1] >= 0.5,
-                        self.classes_[1],
-                        self.classes_[0])
-
-    def predict_proba(self, X):
-        """Predict the posterior probabilities of classification for `X`.
+        """Predict the posterior probabilities of classification for `X`, as well as the scores.
 
         Parameters
         ----------
@@ -485,36 +429,17 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
         * `probas` [array, shape=(n_samples, n_classes)]:
             The predicted probabilities.
         """
+        p = np.zeros((len(X), 3))
 
-        self.n_thetas = len(self.classifiers_[0].params)
+        # Raw classifier output
+        prediction = self.classifiers_[0].predict(X)
 
-        thetas = X[:,-self.n_thetas:]
+        # Calibrated shat prediction
+        p[:, 0] += self.calibrators_[0].predict(clf.predict(X)[:, 0]) / float(len(self.calibrators_))
 
-        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(self.calibrator_mean_thetas)
-        _, nearest_indices = nbrs.kneighbors(thetas)
-        nearest_indices = nearest_indices.flatten()
-
-        p = np.zeros((len(X), 2))
-
-        T = self.classifiers_[0].predict_proba(X)[:, 1]
-
-        #for clf, calibrator in zip(self.classifiers_, self.calibrators_):
-        #    p[:, 1] += calibrator.predict(clf.predict_proba(X)[:, 1])
-
-        if list(nearest_indices[1:]) == list(nearest_indices[:-1]):
-            p[:,1] = self.calibrators_[nearest_indices[0]].predict(T)
-        else:
-            for i in range(len(X)):
-                p[i,1] = self.calibrators_[nearest_indices[i]].predict([T[i]])[0]
-
-        # print ''
-        # print 'X:', X
-        # print 'Calibrator:', nearest_indices
-        # print 'Classifier:', T
-        # print 'Calibrated:', p[:,1]
-
-        #p[:, 1] /= len(self.classifiers_)
-        p[:, 0] = 1. - p[:, 1]
+        # Pipe through score output
+        p[:, 1] = prediction[:,1]
+        p[:, 2] = prediction[:,2]
 
         return p
 
@@ -526,7 +451,6 @@ class CalibratedParameterizedClassifierCV(BaseEstimator, ClassifierMixin):
         return estimator
 
 
-    
 
 
 class HistogramCalibrator(BaseEstimator, RegressorMixin):

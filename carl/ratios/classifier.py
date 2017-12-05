@@ -43,7 +43,7 @@ class ClassifierRatio(BaseEstimator, DensityRatioMixin):
         self.base_estimator = base_estimator
         self.random_state = random_state
 
-    def fit(self, X=None, y=None, sample_weight=None, calibrate_class=None,
+    def fit(self, X=None, y=None, sample_weight=None,
             numerator=None, denominator=None, n_samples=None, **kwargs):
         """Fit the density ratio estimator.
 
@@ -125,22 +125,13 @@ class ClassifierRatio(BaseEstimator, DensityRatioMixin):
         if isinstance(clf, RegressorMixin):
             clf = as_classifier(clf)
 
-        if calibrate_class is None:
-            if sample_weight is None:
-                clf.fit(X, y)
-            else:
-                try:
-                    clf.fit(X, y, sample_weight=sample_weight)
-                except TypeError:
-                    clf.fit(X, y)
+        if sample_weight is None:
+            clf.fit(X, y)
         else:
-            if sample_weight is None:
-                clf.fit(X, y, calibrate_class=calibrate_class)
-            else:
-                try:
-                    clf.fit(X, y, sample_weight=sample_weight, calibrate_class=calibrate_class)
-                except TypeError:
-                    clf.fit(X, y, calibrate_class=calibrate_class)
+            try:
+                clf.fit(X, y, sample_weight=sample_weight)
+            except TypeError:
+                clf.fit(X, y)
 
         self.classifier_ = clf
                 
@@ -212,7 +203,7 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
             self.classifier_ = base_estimator
 
 
-    def fit(self, X=None, y=None, sample_weight=None, calibrate_class=None,
+    def fit(self, X=None, y=None, sample_weight=None,
             numerator=None, denominator=None, n_samples=None, **kwargs):
         """Fit the density ratio estimator.
 
@@ -268,15 +259,6 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
 
             raise NotImplementedError
 
-            X = np.vstack(
-                (numerator.rvs(n_samples // 2,
-                               random_state=rng, **kwargs),
-                 denominator.rvs(n_samples - (n_samples // 2),
-                                 random_state=rng, **kwargs)))
-            y = np.zeros(n_samples, dtype=np.int)
-            y[n_samples // 2:] = 1
-            sample_weight = None
-
         elif X is not None and y is not None:
             if sample_weight is None:
                 n_num = (y[:,0] == 0).sum()
@@ -300,24 +282,13 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
         if isinstance(clf, RegressorMixin):
             clf = as_classifier(clf)
 
-        if calibrate_class is None:
-            if sample_weight is None:
-                clf.fit(X, y)
-            else:
-                raise NotImplementedError
-                try:
-                    clf.fit(X, y, sample_weight=sample_weight)
-                except TypeError:
-                    clf.fit(X, y)
+        if sample_weight is None:
+            clf.fit(X, y)
         else:
-            if sample_weight is None:
-                clf.fit(X, y, calibrate_class=calibrate_class)
-            else:
-                raise NotImplementedError
-                try:
-                    clf.fit(X, y, sample_weight=sample_weight, calibrate_class=calibrate_class)
-                except TypeError:
-                    clf.fit(X, y, calibrate_class=calibrate_class)
+            try:
+                clf.fit(X, y, sample_weight=sample_weight)
+            except TypeError:
+                clf.fit(X, y)
 
         self.classifier_ = clf
 
