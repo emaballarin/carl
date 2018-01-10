@@ -370,7 +370,10 @@ class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
 
             # Calibrator
             calibrator = clone(base_calibrator)
-            T = clf.predict(X)[:, 0]
+
+            T = clf.predict(X)
+            if T.ndim > 1:
+                T = T[:,0]
 
             if sample_weight is None:
                 calibrator.fit(T, y)
@@ -429,17 +432,22 @@ class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
         * `probas` [array, shape=(n_samples, n_classes)]:
             The predicted probabilities.
         """
-        p = np.zeros((len(X), 3))
-
         # Raw classifier output
         prediction = self.classifiers_[0].predict(X)
 
-        # Calibrated shat prediction
-        p[:, 0] += self.calibrators_[0].predict(prediction[:, 0])
 
-        # Pipe through score output
-        p[:, 1] = prediction[:,1]
-        p[:, 2] = prediction[:,2]
+        if prediction.ndim == 1:
+            p = self.calibrators_[0].predict(prediction)
+
+        else:
+
+            p = np.zeros_like(prediction)
+
+            # Calibrated shat prediction
+            p[:, 0] += self.calibrators_[0].predict(prediction[:, 0])
+
+            # Pipe through score output
+            p[:, 1:] = prediction[:,1:]
 
         return p
 

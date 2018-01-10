@@ -265,7 +265,7 @@ class ClassifierScoreRatio(BaseEstimator, DensityRatioMixin):
                 n_den = (y[:,0] == 1).sum()
 
                 if n_num != n_den:
-                    print 'Surprise: we keep the sample weight to None, even though we have', n_num, 'numerator samples and', n_den, 'denominator samples.'
+                    #print('Surprise: we keep the sample weight to None, even though we have', n_num, 'numerator samples and', n_den, 'denominator samples.')
                     sample_weight = None # FIX THIS!
 
                     #sample_weight = np.ones(len(y), dtype=np.float)
