@@ -303,6 +303,7 @@ class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
         self.variable_width = variable_width
         self.independent_binning = independent_binning
         self.cv = cv
+        self.calibration_sample = None
 
     def fit(self, X, y, sample_weight=None):
         """Fit the calibrated model.
@@ -374,6 +375,9 @@ class CalibratedClassifierScoreCV(BaseEstimator, ClassifierMixin):
             T = clf.predict(X)
             if T.ndim > 1:
                 T = T[:,0]
+
+            # Make available for outside world
+            self.calibration_sample = T
 
             if sample_weight is None:
                 calibrator.fit(T, y)
