@@ -813,3 +813,114 @@ class SigmoidCalibrator(BaseEstimator, RegressorMixin):
             Calibrated data.
         """
         return self.calibrator_.predict(T)
+
+
+class NDHistogramCalibrator(BaseEstimator, RegressorMixin):
+    """Probability calibration through density estimation with histograms."""
+
+    def __init__(self, bins="auto", range=None, eps=0.1):
+        """Constructor.
+
+        Parameters
+        ----------
+        * `bins` [string or int or tuple]:
+            The number of bins in each dimension, or `"auto"` to automatically determine the
+            number of bins depending on the number of samples.
+
+        * `range` [((lower, upper),(lower, upper),...), optional]:
+            The lower and upper bounds. If `None`, bounds are automatically
+            inferred from the data.
+
+        * `eps` [float]:
+            The margin to the lower and upper bounds.
+        """
+        self.bins = bins
+        self.range = range
+        self.eps = eps
+        self.independent_binning = False
+
+    def fit(self, T, y, sample_weight=None):
+        """Fit using `T`, `y` as training data.
+
+        Parameters
+        ----------
+        * `T` [array-like, shape=(n_samples,)]:
+            Training data.
+
+        * `y` [array-like, shape=(n_samples,)]:
+            Training target.
+
+        * `sample_weight` [array-like, shape=(n_samples,), optional]:
+            Weights. If set to `None`, all weights will be set to 1.
+
+        Returns
+        -------
+        * `self` [object]:
+            `self`.
+        """
+        # Check input
+        if T.ndim < 2:
+            T = T.reshape((-1,1))
+
+        t0 = T[y == 0]
+        t1 = T[y == 1]
+
+        self.ndim = T.shape[1]
+
+        sw0 = None
+        if sample_weight is not None:
+            sw0 = sample_weight[y == 0]
+
+        sw1 = None
+        if sample_weight is not None:
+            sw1 = sample_weight[y == 1]
+
+        bins = self.bins
+        if self.bins == "auto":
+            bins = 10 + int(len(t0) ** (1. / 3. / self.ndim))
+
+        range_ = self.range
+        if self.range is None:
+            range_ = []
+            for d in range(self.ndim):
+                t_min = max(0, min(np.min(t0[:,d]), np.min(t1[:,d])) - self.eps)
+                t_max = min(1, max(np.max(t0[:,d]), np.max(t1[:,d])) + self.eps)
+            range_.append((t_min, t_max))
+
+        # Fit
+        self.calibrator0 = Histogram(bins=bins, range=range_,
+                                     interpolation=None,
+                                     variable_width=False)
+        self.calibrator1 = Histogram(bins=bins, range=range_,
+                                     interpolation=None,
+                                     variable_width=False)
+
+        self.calibrator0.fit(t0, sample_weight=sw0)
+        self.calibrator1.fit(t1, sample_weight=sw1)
+
+        return self
+
+    def predict(self, T):
+        """Calibrate data.
+
+        Parameters
+        ----------
+        * `T` [array-like, shape=(n_samples,)]:
+            Data to calibrate.
+
+        Returns
+        -------
+        * `Tt` [array, shape=(n_samples,)]:
+            Calibrated data.
+        """
+
+        if T.ndim < 2:
+            T = T.reshape((-1,1))
+
+        num = self.calibrator1.pdf(T)
+        den = self.calibrator0.pdf(T) + self.calibrator1.pdf(T)
+
+        p = num / den
+        p[den == 0] = 0.5
+
+        return p
