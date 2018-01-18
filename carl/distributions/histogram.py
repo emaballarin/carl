@@ -11,6 +11,7 @@ from sklearn.utils import check_array
 from scipy.interpolate import interp1d
 
 from .base import DistributionMixin
+from .base import weighted_quantile
 
 
 class Histogram(DistributionMixin):
@@ -95,14 +96,14 @@ class Histogram(DistributionMixin):
 
         # Compute histogram and edges
         if self.bins == "blocks":
-            raise NoteImplementedError
+            raise NotImplementedError
             #bins = bayesian_blocks(X.ravel(), fitness="events", p0=0.0001)
             #range_ = self.range[0] if self.range else None
             #h, e = np.histogram(X.ravel(), bins=bins, range=range_,
             #                    weights=sample_weight, normed=False)
             #e = [e]
             
-        elif isinstance(self.bins, (list,tuple)):
+        elif isinstance(self.bins, (list,tuple)) and (X.ndim == 1 or X.shape[1] == 1):
             bins = self.bins
             range_ = self.range[0] if self.range else None
             h, e = np.histogram(X.ravel(), bins=bins, range=range_,
@@ -113,8 +114,8 @@ class Histogram(DistributionMixin):
             e = [e]
 
         elif self.variable_width:
-            ticks = [np.percentile(X.ravel(), 100. * k / self.bins) for k
-                     in range(self.bins + 1)]
+            ticks = [weighted_quantile(X.ravel(), k / self.bins, sample_weight=sample_weight)
+                     for k in range(self.bins + 1)]
             ticks[-1] += 1e-5
             range_ = self.range[0] if self.range else None
             h, e = np.histogram(X.ravel(), bins=ticks, range=range_,
@@ -126,8 +127,11 @@ class Histogram(DistributionMixin):
 
         else:
             bins = self.bins
-            h, e = np.histogramdd(X, bins=bins, range=self.range,
+            range_ = self.range if self.range else None
+            h, e = np.histogramdd(X, bins=bins, range=range_,
                                   weights=sample_weight, normed=True)
+
+            # results are not normalized, but that cancels in the ratio
 
         # Add empty bins for out of bound samples
         for j in range(X.shape[1]):

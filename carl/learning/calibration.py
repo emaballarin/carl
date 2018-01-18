@@ -23,6 +23,7 @@ from ..distributions import KernelDensity
 from ..distributions import Histogram
 from .base import as_classifier
 from .base import check_cv
+from ..distributions.base import weighted_quantile
 
 
 class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
@@ -34,7 +35,7 @@ class CalibratedClassifierCV(BaseEstimator, ClassifierMixin):
     """
 
     def __init__(self, base_estimator, method="histogram", bins="auto",
-                 interpolation=None, variable_width=False, independent_binning=True, cv=1):
+                 interpolation=None, variable_width=False, independent_binning=False, cv=1):
         """Constructor.
 
         Parameters
@@ -469,7 +470,7 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
     """Probability calibration through density estimation with histograms."""
 
     def __init__(self, bins="auto", range=None, eps=0.1,
-                 interpolation=None, variable_width=False, independent_binning=True):
+                 interpolation=None, variable_width=False, independent_binning=False):
         """Constructor.
 
         Parameters
@@ -538,25 +539,29 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
 
         range_ = self.range
         if self.range is None:
-            t_min = max(0, min(np.min(t0), np.min(t1)) - self.eps)
-            t_max = min(1, max(np.max(t0), np.max(t1)) + self.eps)
+            #t_min = max(0, min(np.min(t0), np.min(t1)) - self.eps)
+            #t_max = min(1, max(np.max(t0), np.max(t1)) + self.eps)
+            t_min = min(np.min(t0), np.min(t1)) - self.eps
+            t_max = max(np.max(t0), np.max(t1)) + self.eps
             range_ = [(t_min, t_max)]
 
         # Common variable-width binning for nom and denom
         if self.variable_width and not self.independent_binning:
-            bins_ = [np.percentile(np.hstack((t0,t1)).ravel(),
-                                   100. * k / bins)
-                                   for k in range(bins + 1)]
+            bins_ = [weighted_quantile(T.ravel(), float(k) / bins, sample_weight=sample_weight)
+                     for k in range(bins + 1)]
+            variable_width_ = False
+
         else:
+            variable_width_ = self.variable_width
             bins_ = bins
             
         # Fit
         self.calibrator0 = Histogram(bins=bins_, range=range_,
                                      interpolation=self.interpolation,
-                                     variable_width=self.variable_width)
+                                     variable_width=variable_width_)
         self.calibrator1 = Histogram(bins=bins_, range=range_,
                                      interpolation=self.interpolation,
-                                     variable_width=self.variable_width)
+                                     variable_width=variable_width_)
 
         self.calibrator0.fit(t0.reshape(-1, 1), sample_weight=sw0)
         self.calibrator1.fit(t1.reshape(-1, 1), sample_weight=sw1)
@@ -576,7 +581,7 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
         * `Tt` [array, shape=(n_samples,)]:
             Calibrated data.
         """
-        T = column_or_1d(T).reshape(-1, 1)
+        T = T.reshape(-1, 1)
         num = self.calibrator1.pdf(T)
         den = self.calibrator0.pdf(T) + self.calibrator1.pdf(T)
 
