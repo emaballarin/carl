@@ -823,8 +823,9 @@ class NDHistogramCalibrator(BaseEstimator, RegressorMixin):
 
         Parameters
         ----------
-        * `bins` [string or int or tuple]:
-            The number of bins in each dimension, or `"auto"` to automatically determine the
+        * `bins` [tuple or string]:
+            The bin edges in each dimension, number of bins in each dimension,
+            or `"auto"` to automatically determine the
             number of bins depending on the number of samples.
 
         * `range` [((lower, upper),(lower, upper),...), optional]:
@@ -883,8 +884,8 @@ class NDHistogramCalibrator(BaseEstimator, RegressorMixin):
         if self.range is None:
             range_ = []
             for d in range(self.ndim):
-                t_min = max(0, min(np.min(t0[:,d]), np.min(t1[:,d])) - self.eps)
-                t_max = min(1, max(np.max(t0[:,d]), np.max(t1[:,d])) + self.eps)
+                t_min = min(np.min(t0[:,d]), np.min(t1[:,d])) - self.eps
+                t_max = max(np.max(t0[:,d]), np.max(t1[:,d])) + self.eps
             range_.append((t_min, t_max))
 
         # Fit
