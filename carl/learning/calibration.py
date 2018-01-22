@@ -501,7 +501,7 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
         self.variable_width = variable_width
         self.independent_binning = independent_binning
 
-    def fit(self, T, y, sample_weight=None):
+    def fit(self, T, y, sample_weight=None, minimum_bin_width=1.e-3):
         """Fit using `T`, `y` as training data.
 
         Parameters
@@ -547,8 +547,16 @@ class HistogramCalibrator(BaseEstimator, RegressorMixin):
 
         # Common variable-width binning for nom and denom
         if self.variable_width and not self.independent_binning:
-            bins_ = [weighted_quantile(T.ravel(), float(k) / bins, sample_weight=sample_weight)
-                     for k in range(bins + 1)]
+            bins_ = np.array([weighted_quantile(T.ravel(), float(k) / bins, sample_weight=sample_weight)
+                             for k in range(bins + 1)])
+
+            # Minimum bin width
+            too_small = np.where( (bins_[1:] - bins_[:-1]) < minimum_bin_width)[0]
+            while len(too_small) > 0:
+                bins_[too_small + 1] += self.eps
+                too_small = np.where( bins_[1:] - bins_[:-1] < minimum_bin_width)[0]
+
+            bins_ = [bins_]
             variable_width_ = False
 
         else:
@@ -891,7 +899,7 @@ class NDHistogramCalibrator(BaseEstimator, RegressorMixin):
             for d in range(self.ndim):
                 t_min = min(np.min(t0[:,d]), np.min(t1[:,d])) - self.eps
                 t_max = max(np.max(t0[:,d]), np.max(t1[:,d])) + self.eps
-            range_.append((t_min, t_max))
+                range_.append((t_min, t_max))
 
         # Fit
         self.calibrator0 = Histogram(bins=bins, range=range_,

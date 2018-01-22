@@ -103,7 +103,7 @@ class Histogram(DistributionMixin):
             #                    weights=sample_weight, normed=False)
             #e = [e]
             
-        elif isinstance(self.bins, (list,tuple)) and (X.ndim == 1 or X.shape[1] == 1):
+        elif isinstance(self.bins, (list,tuple)) and (X.ndim == 1 or X.shape[1] == 1) and False: # something isnt working
             bins = self.bins
             range_ = self.range[0] if self.range else None
             h, e = np.histogram(X.ravel(), bins=bins, range=range_,
@@ -112,6 +112,7 @@ class Histogram(DistributionMixin):
             widths = e[1:] - e[:-1]
             h = h / widths / h.sum()
             e = [e]
+
 
         elif self.variable_width:
             ticks = [weighted_quantile(X.ravel(), k / self.bins, sample_weight=sample_weight)
@@ -128,10 +129,9 @@ class Histogram(DistributionMixin):
         else:
             bins = self.bins
             range_ = self.range if self.range else None
+
             h, e = np.histogramdd(X, bins=bins, range=range_,
                                   weights=sample_weight, normed=True)
-
-            # results are not normalized, but that cancels in the ratio
 
         # Add empty bins for out of bound samples
         for j in range(X.shape[1]):
