@@ -4,7 +4,7 @@
 
 import numpy as np
 
-#from astropy.stats import bayesian_blocks
+from astropy.stats import bayesian_blocks
 from itertools import product
 from sklearn.utils import check_random_state
 from sklearn.utils import check_array
@@ -88,7 +88,7 @@ class Histogram(DistributionMixin):
         return low + u * (high - low)
 
     def fit(self, X, sample_weight=None, **kwargs):
-        
+
         # Checks
         X = check_array(X)
         if sample_weight is not None and len(sample_weight) != len(X):
@@ -96,13 +96,13 @@ class Histogram(DistributionMixin):
 
         # Compute histogram and edges
         if self.bins == "blocks":
-            raise NotImplementedError
-            #bins = bayesian_blocks(X.ravel(), fitness="events", p0=0.0001)
-            #range_ = self.range[0] if self.range else None
-            #h, e = np.histogram(X.ravel(), bins=bins, range=range_,
-            #                    weights=sample_weight, normed=False)
-            #e = [e]
-            
+            #raise NotImplementedError
+            bins = bayesian_blocks(X.ravel(), fitness="events", p0=0.0001)
+            range_ = self.range[0] if self.range else None
+            h, e = np.histogram(X.ravel(), bins=bins, range=range_,
+                                weights=sample_weight, normed=False)
+            e = [e]
+
         elif isinstance(self.bins, (list,tuple)) and (X.ndim == 1 or X.shape[1] == 1) and False: # something isnt working
             bins = self.bins
             range_ = self.range[0] if self.range else None
